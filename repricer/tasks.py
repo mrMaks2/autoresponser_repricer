@@ -44,7 +44,6 @@ def load_dict_from_file(filename):
         logger.error(f"Ошибка загрузки файла {filename}: {e}")
         return {}
     
-# Загрузка данных из файлов
 seller_arts = load_dict_from_file('repricer/seller_arts.txt')
 prod_arts_cab1 = load_dict_from_file('repricer/prod_arts_cab1.txt')
 prod_arts_cab2 = load_dict_from_file('repricer/prod_arts_cab2.txt')
@@ -106,7 +105,6 @@ def process_product(wb_arts, ozon_arts, prices_with_discount_wb, prices_with_dis
         response_from_ozon_get = requests.post(url_ozon_get, headers=headers_for_ozon, json=params_for_ozon_get)
         response_from_ozon_get.raise_for_status()
         
-        # Проверяем, что есть данные в ответе
         response_data = response_from_ozon_get.json()
         if not response_data.get('items') or len(response_data['items']) == 0:
             logger.warning(f"Продукт {offer_id} не найден в ответе API Ozon")
@@ -114,7 +112,6 @@ def process_product(wb_arts, ozon_arts, prices_with_discount_wb, prices_with_dis
             
         prices_data_ozon = response_data['items'][0]['price']
         
-        # Проверяем наличие необходимых полей
         if 'marketing_seller_price' not in prices_data_ozon or 'marketing_price' not in prices_data_ozon:
             logger.warning(f"Отсутствуют необходимые поля цены для продукта {offer_id}")
             return None
@@ -192,18 +189,19 @@ def process_product(wb_arts, ozon_arts, prices_with_discount_wb, prices_with_dis
         }
 
 def process_price(wb_articul, old_price, wb_price, wb_old_price):
-    """Обрабатывает один продукт и возвращает данные о ценах для WB"""
-    # Проверяем какая цена, спарсенная или необходимая, больше или меньше
+
     if wb_price < old_price:
-        # Если спарсенная цена больше от необходимой
+
         price_difference = round(1 - wb_price / old_price, 5)
         new_price = int(math.floor(wb_old_price * (1 - price_difference)))
+
     elif old_price < wb_price:
-        # Если спарсенная цена меньше от необходимой
+
         price_difference = round(1 - old_price / wb_price, 5)
         new_price = int(math.floor(wb_old_price / (1 - price_difference)))
+
     else:
-        # Если равны, то пропускаем "итерацию"
+
         return None
 
     return {
@@ -234,7 +232,6 @@ def change_price():
 
         if response_data.get('data') or len(response_data['data']['listGoods']) != 0:
             for price_data_wb in response_data['data']['listGoods']:
-                # Проверяем на наличие данных о цене у товара
                 if price_data_wb['sizes'][0]['price']:
                     prices_data_dict_wb[price_data_wb['nmID']] = price_data_wb['sizes'][0]['price']
                 else:
@@ -246,8 +243,7 @@ def change_price():
         try:
             if response_data:
                 prices_with_discount_wb_price = parse_from_wb(wb_art)
-                
-                # Проверяем, что парсинг прошел успешно
+
                 if not prices_with_discount_wb_price:
                     logger.error(f"Не удалось распарсить цены для WB арт {wb_art}")
 
@@ -260,7 +256,7 @@ def change_price():
         prices_dict = get_prices_dict(wb_art)
 
         for wb_articul, wb_price in prices_dict.items():
-            # Проверям на равенство цены насранице WB от ожидаемой
+
             if wb_articul not in prices_with_discount_wb_price:
                 logger.warning(f"Артикул {wb_articul} не найден в распарсенных ценах WB")
                 continue
@@ -273,10 +269,9 @@ def change_price():
                 wb_old_price = prices_data_dict_wb[wb_articul]
                 new_price_for_wb = process_price(wb_articul, old_price, wb_price, wb_old_price)
 
-                # Проверяем на наличие полученных данных new_price_for_wb
                 if new_price_for_wb:
-                    logger.info(f"Старая цена на WB: {wb_old_price}")
-                    logger.info(f"Новая цена для WB: {new_price_for_wb['price']}")
+                    logger.info(f"Старая цена {wb_articul} на WB: {wb_old_price}")
+                    logger.info(f"Новая цена {wb_articul} для WB: {new_price_for_wb['price']}")
                     params_for_wb_post_all['data'].append(new_price_for_wb)
                 else:
                     logger.warning(f"Не удалось обработать цену продукта WB: {wb_articul}")
@@ -313,8 +308,6 @@ def change_price():
 
                 if res_upload_status.status_code == 200:
                     logger.info(f"Статус обновления цены: {res_upload_status.json()['data']['status']}")
-                else:
-                    logger.info(res_upload_status.status_code)
 
             except Exception as e:
                 logger.info(f"Ошибка получения статуса обновления цены нв WB: {e}")
@@ -331,7 +324,6 @@ def change_price():
                 prices_with_discount_wb = prices_with_discount_wb_price
                 prices_with_discount_ozon = parse_from_ozon(ozon_art)
             
-            # Проверяем, что парсинг прошел успешно
             if not prices_with_discount_wb or not prices_with_discount_ozon:
                 logger.error(f"Не удалось распарсить цены для WB арт {wb_art}, Ozon арт {ozon_art}")
                 continue
@@ -343,13 +335,12 @@ def change_price():
         headers_for_ozon = get_headers_for_ozon(ozon_art)
         product_arts_dict = get_product_arts(ozon_art)
 
-        # Проверяем, что словарь артикулов не пустой
         if not product_arts_dict:
             logger.warning(f"Не найден словарь артикулов для Ozon арт {ozon_art}")
             continue
 
         for wb_arts, ozon_arts in product_arts_dict.items():
-            # Проверяем структуру ozon_arts
+
             if not isinstance(ozon_arts, list) or len(ozon_arts) < 2:
                 logger.warning(f"Некорректная структура ozon_arts для WB арт {wb_arts}: {ozon_arts}")
                 continue
@@ -379,3 +370,23 @@ def change_price():
         else:
             logger.info(f'Пустой список для изменения цен. POST запрос на Ozon не был отправлен')
 
+    # product_from_ozon = Product_from_ozon(
+    #     prod_art_from_ozon=ozon_art,
+    #     price_with_discount_ozon=price_with_discount_ozon,
+    #     price_without_co_invest=price_without_co_invest,
+    #     price_with_co_invest=price_with_co_invest,
+    #     discount_co_invest=discount_co_invest,
+    #     discount_ozon_with_wallet=discount_ozon_with_wallet,
+    #     price_ozon_s_be_with_wallet=price_ozon_s_be_with_wallet,
+    #     price_ozon_s_be_with_co_invest=price_ozon_s_be_with_co_invest,
+    #     price_ozon_s_be=price_ozon_s_be
+    #     )
+    # logger.info(product_from_ozon)
+    # product_from_ozon.save()
+
+    # product_from_wb = Product_from_wb(
+    #     prod_art_from_wb=wb_arts,
+    #     price_with_discount_wb=price_with_discount_wb
+    # )
+    # logger.info(product_from_wb)
+    # product_from_wb.save()

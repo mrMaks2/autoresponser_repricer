@@ -3,3 +3,4 @@ dotenv
 APScheduler
 DrissionPage
 fake_useragent
+psycopg2-binary

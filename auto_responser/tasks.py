@@ -1,7 +1,7 @@
 import requests
 import os
 from dotenv import load_dotenv
-from random import randint
+from random import randint, shuffle
 import logging
 import ast
 
@@ -27,11 +27,13 @@ def load_dict_from_file(filename):
     except (FileNotFoundError, SyntaxError, ValueError) as e:
         logger.error(f"Ошибка загрузки файла {filename}: {e}")
         return {}
-    
+
+response_list_cab1 = load_dict_from_file('auto_responser/response_list_cab1.txt')
+response_list_cab2 = load_dict_from_file('auto_responser/response_list_cab2.txt')
 response_list_cab3 = load_dict_from_file('auto_responser/response_list_cab3.txt')
 
-with open('auto_responser/response_list_cab1_2.txt', 'r', encoding='utf-8') as f:
-        response_list_cab1_2 = [str(resp.strip().strip('"')) for resp in f.readlines()]
+with open('auto_responser/response_list_cab.txt', 'r', encoding='utf-8') as f:
+        response_list = [str(resp.strip().strip('"')) for resp in f.readlines()]
 
 params_reviews = {
     "isAnswered": 'false',
@@ -52,105 +54,68 @@ headers_cab3 = {
 }
 
 headers_list = [headers_cab1, headers_cab2, headers_cab3]
+response_list_cabs = [response_list_cab1, response_list_cab2, response_list_cab3]
 
 def response_to_reviews():
 
     for headers in headers_list:
 
-        if headers['Authorization'] == jwt_for_resp_and_get_cab3:
+        try:
+            response = requests.get(url_for_reviews, headers=headers, params=params_reviews, timeout=30)
+            response.raise_for_status()
+            
+            reviews_data = response.json()
 
-            try:
-                response = requests.get(url_for_reviews, headers=headers, params=params_reviews, timeout=30)
-                response.raise_for_status()
-                
-                reviews_data = response.json()
-                
-                if not reviews_data.get('data') or not reviews_data['data'].get('feedbacks'):
-                    logger.warning("Нет отзывов для обработки или неверная структура ответа")
-                    return
+            cab_index = headers_list.index(headers)
+            
+            if not reviews_data.get('data') or not reviews_data['data'].get('feedbacks'):
+                logger.warning(f"Нет отзывов для обработки или неверная структура ответа для кабинета {cab_index + 1}")
+                continue
 
-                ids = {}
+            ids = {}
 
-                for review in reviews_data['data']['feedbacks']:
+            reviews_data_list = reviews_data['data']['feedbacks'].copy()
+            shuffle(reviews_data_list)
+
+            if reviews_data_list:
+                for review in reviews_data_list:
                     if review.get('productValuation') == 5:
                         reviews_id = review.get('id')
                         reviews_nmid = review.get('productDetails', {}).get('nmId')
                         if reviews_id and reviews_nmid:
                             ids[reviews_id] = reviews_nmid
 
-                logger.info(f"Найдено отзывов для ответа: {len(ids)}")
+            logger.info(f"Найдено отзывов для ответа: {len(ids)}")
 
-                for review_id, review_nmid in ids.items():
-                    try:
-                        response_list_nmid = response_list_cab3.get(review_nmid)
-                        if not response_list_nmid:
-                            logger.info(f'Не найден шаблон ответа для nmId: {review_nmid}')
-                            continue
-                        
-                        resp_len = len(response_list_nmid)
-                        if resp_len == 0:
-                            logger.warning(f'Пустой список ответов для nmId: {review_nmid}')
-                            continue
+            for review_id, review_nmid in ids.items():
+                try:
+                    response_list_nmid = response_list_cabs[cab_index].get(review_nmid)
+                    if not response_list_nmid:
+                        logger.info(f'Не найден шаблон ответа для nmId: {review_nmid}')
+                        response_list_nmid = response_list
+                        logger.info('Шаблоны ответов взяли из общего пула')
+                    
+                    resp_len = len(response_list_nmid)
+                    if resp_len == 0:
+                        logger.warning(f'Пустой список ответов для nmId: {review_nmid}')
+                        continue
 
-                        params_response = {
-                            "id": review_id,
-                            "text": response_list_nmid[randint(0, resp_len - 1)]
-                        }
+                    params_response = {
+                        "id": review_id,
+                        "text": response_list_nmid[randint(0, resp_len - 1)]
+                    }
 
-                        logger.info(f"Отправка ответа на отзыв {review_id}: {params_response['text'][:50]}...")
-                        
-                        resp = requests.post(url_for_response, headers=headers, json=params_response, timeout=30)
-                        resp.raise_for_status()
-                        logger.info(f"Успешно ответили на отзыв {review_id}")
+                    logger.info(f"Отправка ответа на отзыв {review_id}: {params_response['text'][:50]}...")
+                    
+                    resp = requests.post(url_for_response, headers=headers, json=params_response, timeout=30)
+                    resp.raise_for_status()
 
-                    except requests.exceptions.RequestException as e:
-                        logger.error(f"Ошибка при отправке ответа на отзыв {review_id}: {e}")
-                    except Exception as e:
-                        logger.error(f"Неожиданная ошибка при обработке отзыва {review_id}: {e}")
+                except requests.exceptions.RequestException as e:
+                    logger.error(f"Ошибка при отправке ответа на отзыв {review_id}: {e}")
+                except Exception as e:
+                    logger.error(f"Неожиданная ошибка при обработке отзыва {review_id}: {e}")
 
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Ошибка при получении отзывов: {e}")
-            except Exception as e:
-                logger.error(f"Неожиданная ошибка в функции response_to_reviews: {e}")
-
-        else:
-                
-            try:
-
-                response = requests.get(url_for_reviews, headers=headers, params=params_reviews)
-                response.raise_for_status()
-
-                reviews_data = response.json()
-
-                if not reviews_data.get('data') or not reviews_data['data'].get('feedbacks'):
-                    logger.warning("Нет отзывов для обработки или неверная структура ответа")
-                    continue
-
-                ids = []
-
-                for review in reviews_data['data']['feedbacks']:
-                    if review['productValuation'] == 5:
-                        review_id = review['id']
-                        ids.append(review_id)
-
-                logger.info(f"Найдено отзывов для ответа: {len(ids)}")
-
-                for review_id in ids:
-                    try:
-                        params_response = {
-                            "id": review_id,
-                            "text": response_list_cab1_2[randint(0,38)]
-                        }
-                        logger.info(f"Отправка ответа на отзыв {review_id}: {params_response['text'][:50]}...")
-                        requests.post(url_for_response, headers=headers, json=params_response)
-
-                    except requests.exceptions.RequestException as e:
-                        logger.error(f"Ошибка при отправке ответа на отзыв {review_id}: {e}")
-                    except Exception as e:
-                        logger.error(f"Неожиданная ошибка при обработке отзыва {review_id}: {e}")
-
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Ошибка при получении отзывов: {e}")
-            except Exception as e:
-                logger.error(f"Неожиданная ошибка в функции response_to_reviews: {e}")
-                
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Ошибка при получении отзывов: {e}")
+        except Exception as e:
+            logger.error(f"Неожиданная ошибка в функции response_to_reviews: {e}")
