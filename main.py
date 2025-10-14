@@ -1,8 +1,11 @@
 from apscheduler.schedulers.blocking import BlockingScheduler
 from auto_responser.tasks import response_to_reviews
 from repricer.tasks import change_price
+from campaigns.tasks_true import campaigns_placement_redact as placement_true
+from campaigns.tasks_false import campaigns_placement_redact as placement_false
 import logging
 import random
+import time
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('main')
@@ -31,9 +34,12 @@ def change_price_random_interval():
 if __name__ == "__main__":
     response_to_reviews()
     change_price()
+    placement_true()
     
     scheduler = BlockingScheduler()
     scheduler.add_job(response_to_reviews, "interval", minutes=15)
+    scheduler.add_job(placement_true, "interval", minutes=15)
+    scheduler.add_job(placement_false, "interval", seconds=62)
     
     # Первый запуск change_price со случайным интервалом
     first_interval = random.randint(10, 20)
