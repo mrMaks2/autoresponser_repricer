@@ -172,6 +172,16 @@ def process_product(wb_arts, ozon_arts, prices_with_discount_wb, prices_with_dis
     else:
         price_ozon_s_be = price_without_co_invest
 
+    def_disc_1 = (1 - price_ozon_s_be / old_price) * 100
+    def_disc_2 = (1 - min_price / old_price) * 100
+
+    if def_disc_1 < 5:
+        old_price = old_price * 1.3
+        min_price = math.ceil(old_price / 2)
+
+    if def_disc_2 > 50:
+        min_price = math.ceil(old_price / 2)
+
     return {
             "auto_action_enabled": "DISABLED",
             "auto_add_to_ozon_actions_list_enabled": "DISABLED",

@@ -153,7 +153,7 @@ def set_realistic_browser_properties(page):
     # Случайная задержка между действиями (имитация человеческого поведения)
     time.sleep(random.uniform(0.5, 2.0))
 
-def gradual_scroll(page, scroll_pixels=1000, pause=1, max_scrolls=10):
+def gradual_scroll(page, scroll_pixels=2000, pause=1, max_scrolls=10):
     current_height = page.run_js('return document.documentElement.scrollHeight')
     
     for _ in range(max_scrolls):
@@ -185,8 +185,8 @@ def check_login_state(site_name):
         try:
             with open(state_file, 'r', encoding='utf-8') as f:
                 state = json.load(f)
-            # Проверяем, не устарело ли состояние (старше 7 дней)
-            if time.time() - state['timestamp'] < 7 * 24 * 60 * 60:
+            # Проверяем, не устарело ли состояние (старше 30 дней)
+            if time.time() - state['timestamp'] < 30 * 24 * 60 * 60:
                 return True
         except:
             pass
